@@ -82,15 +82,19 @@ class VideoRepository {
         'Máximo 1000 caracteres',
       );
     }
+    final displayName = author.displayName?.trim();
+    final authorName = displayName == null || displayName.isEmpty
+        ? 'Usuario'
+        : displayName.length > 100
+        ? displayName.substring(0, 100)
+        : displayName;
     await _store.add({
       'title': cleanTitle,
       'description': cleanDescription,
       'videoUrl': videoUrl,
       'cloudinaryPublicId': cloudinaryPublicId,
       'authorId': author.uid,
-      'authorName': author.displayName?.trim().isNotEmpty == true
-          ? author.displayName!.trim()
-          : 'Usuario',
+      'authorName': authorName,
       'createdAt': FieldValue.serverTimestamp(),
     });
   }

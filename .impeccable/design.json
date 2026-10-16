@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-15T14:30:00Z",
+  "title": "Design System: Videoteca",
+  "extensions": {
+    "breakpoints": [
+      { "name": "two-column", "value": "900px" }
+    ],
+    "shadows": [
+      { "name": "video-frame", "value": "0 17px 30px rgba(0,82,118,0.27)", "purpose": "Separa el fotograma del panel celeste." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Botón principal",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Acción de acceso o registro a ancho completo.",
+      "html": "<button class=\"ds-btn-primary\">Iniciar sesión →</button>",
+      "css": ".ds-btn-primary{height:56px;padding:0 24px;background:#102B3C;color:#fff;border:0;border-radius:14px;font:700 16px sans-serif;cursor:pointer}.ds-btn-primary:hover{background:#1C435A}.ds-btn-primary:focus-visible{outline:3px solid #37BCE8;outline-offset:3px}"
+    },
+    {
+      "name": "Campo de correo",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Campo de formulario con etiqueta persistente.",
+      "html": "<label class=\"ds-field\">Correo electrónico<input type=\"email\" placeholder=\"tu@correo.com\"></label>",
+      "css": ".ds-field{display:grid;gap:8px;color:#102B3C;font:700 14px sans-serif}.ds-field input{height:56px;padding:0 18px;background:#fff;color:#102B3C;border:1px solid #D5E3E9;border-radius:14px;font:400 16px sans-serif}.ds-field input:focus-visible{outline:2px solid #087EAA;outline-offset:0}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Una ventana al siguiente video",
+    "overview": "Videoteca usa una superficie celeste expresiva para presentar el producto y una superficie clara para completar tareas.",
+    "keyCharacteristics": [
+      "Identidad celeste y tinta azul oscuro.",
+      "Ilustración de un fotograma con control de reproducción.",
+      "Controles Material 3 redondeados y amplios."
+    ],
+    "rules": [
+      {
+        "name": "The Celeste Rule",
+        "body": "El celeste domina la zona de identidad y los acentos; los botones principales del formulario usan tinta oscura para conservar jerarquía y contraste.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do conservar etiquetas visibles sobre todos los campos.",
+      "Do mantener el botón principal a ancho completo en los formularios."
+    ],
+    "donts": [
+      "Don't usar el celeste como color de texto largo sobre fondo blanco.",
+      "Don't ocultar los mensajes de validación mientras la persona corrige el formulario."
+    ]
+  }
+}

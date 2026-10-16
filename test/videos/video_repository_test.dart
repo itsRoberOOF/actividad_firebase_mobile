@@ -11,6 +11,11 @@ class _Author extends Fake implements User {
   String? get displayName => 'Ana';
 }
 
+class _LongNameAuthor extends _Author {
+  @override
+  String? get displayName => 'A' * 101;
+}
+
 class _Store implements VideoDocumentStore {
   Map<String, dynamic>? added;
   List<VideoDocument> documents = [];
@@ -39,6 +44,18 @@ void main() {
     expect(store.added?['authorName'], 'Ana');
     expect(store.added?['createdAt'], isA<FieldValue>());
     expect(store.added?['title'], 'Mi primer video');
+  });
+
+  test('limita el nombre del autor al máximo que aceptan las reglas', () async {
+    final store = _Store();
+    await VideoRepository(store: store).createVideo(
+      title: 'Prueba',
+      description: '',
+      videoUrl: 'https://res.cloudinary.com/demo/video/upload/test.mp4',
+      cloudinaryPublicId: 'test',
+      author: _LongNameAuthor(),
+    );
+    expect((store.added?['authorName'] as String).length, 100);
   });
 
   test('ordena registros persistidos y tolera fecha pendiente', () async {

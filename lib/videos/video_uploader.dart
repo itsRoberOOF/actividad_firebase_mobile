@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
 
-const maxVideoBytes = 100 * 1024 * 1024;
+const maxVideoBytes = 100000000;
 const allowedVideoExtensions = {'mp4', 'mov', 'm4v', 'webm'};
 
 class VideoPublishException implements Exception {
@@ -26,9 +26,13 @@ void validateVideoSelection({
   required int bytes,
 }) {
   final extension = name.toLowerCase().split('.').last;
+  final genericMime =
+      mimeType == null ||
+      mimeType.isEmpty ||
+      mimeType == 'application/octet-stream';
   if ((name.isNotEmpty && !allowedVideoExtensions.contains(extension)) ||
       (name.isEmpty && mimeType?.startsWith('video/') != true) ||
-      (mimeType != null && !mimeType.startsWith('video/'))) {
+      (!genericMime && !mimeType.startsWith('video/'))) {
     throw const VideoPublishException('Elige un video MP4, MOV, M4V o WebM.');
   }
   if (bytes <= 0) {
@@ -39,6 +43,17 @@ void validateVideoSelection({
   if (bytes > maxVideoBytes) {
     throw const VideoPublishException('El video no puede superar 100 MB.');
   }
+}
+
+String _uploadMimeType(XFile file) {
+  if (file.mimeType?.startsWith('video/') == true) return file.mimeType!;
+  final extension = file.name.toLowerCase().split('.').last;
+  return switch (extension) {
+    'mov' => 'video/quicktime',
+    'webm' => 'video/webm',
+    'm4v' => 'video/x-m4v',
+    _ => 'video/mp4',
+  };
 }
 
 abstract class VideoUploader {
@@ -91,7 +106,7 @@ class CloudinaryVideoUploader implements VideoUploader {
           () => file.openRead(),
           size,
           filename: file.name.isEmpty ? 'video.mp4' : file.name,
-          contentType: DioMediaType.parse(file.mimeType ?? 'video/mp4'),
+          contentType: DioMediaType.parse(_uploadMimeType(file)),
         ),
       });
       final response = await _dio.post<Map<String, dynamic>>(

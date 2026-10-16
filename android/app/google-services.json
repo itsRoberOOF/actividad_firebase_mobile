@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "75221581759",
+    "project_id": "listasuper-75ab3",
+    "storage_bucket": "listasuper-75ab3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:75221581759:android:88e6f8a45e5cfe675dab0a",
+        "android_client_info": {
+          "package_name": "com.faro.videos"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDB-6fZwY02H5H7BMnlMqionpXtPq30sLs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

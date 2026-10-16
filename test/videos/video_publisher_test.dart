@@ -72,9 +72,20 @@ void main() {
       () => validateVideoSelection(
         name: 'video.mp4',
         mimeType: 'video/mp4',
-        bytes: 100 * 1024 * 1024 + 1,
+        bytes: 100000001,
       ),
       throwsA(isA<VideoPublishException>()),
+    );
+  });
+
+  test('acepta un MP4 con MIME genérico de navegador', () {
+    expect(
+      () => validateVideoSelection(
+        name: 'clip.mp4',
+        mimeType: 'application/octet-stream',
+        bytes: 1024,
+      ),
+      returnsNormally,
     );
   });
 
