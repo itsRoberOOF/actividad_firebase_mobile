@@ -6,10 +6,13 @@ Aplicación Flutter para Android y web con registro e inicio de sesión por corr
 
 ```sh
 flutter pub get
-flutter run -d edge --dart-define=CLOUDINARY_CLOUD_NAME=<cloud_name> --dart-define=CLOUDINARY_UPLOAD_PRESET=<upload_preset>
+cp cloudinary.example.json cloudinary.json   # y completa tus valores
+flutter run -d edge --dart-define-from-file=cloudinary.json
 ```
 
-Para Android, inicia un emulador o conecta un dispositivo y ejecuta el mismo comando sin `-d edge`.
+Para Android, inicia un emulador o conecta un dispositivo y ejecuta el mismo comando sin `-d edge`. Las compilaciones usan la misma opción, por ejemplo `flutter build web --dart-define-from-file=cloudinary.json`.
+
+`cloudinary.json` está en `.gitignore`: cada persona lo crea en su copia local a partir de `cloudinary.example.json`. Sin ese archivo la app funciona, pero el diálogo de subida indica que falta configurar Cloudinary.
 
 ## Firebase
 
@@ -26,7 +29,7 @@ La app incluye acceso, registro, recuperación de contraseña y una vista inicia
 
 Los archivos se guardan en **Cloudinary** y sus datos (título, descripción, autor, fecha y URL) en Firestore. El autor sale de Firebase Auth; Firestore asigna la fecha en el servidor. No se usa Firebase Storage ni se guarda el archivo en Firestore.
 
-La cuenta usa el `cloud_name` público `<cloud_name>`. El preset `<upload_preset>` está configurado como **unsigned**, en la carpeta `videoteca`, para `mp4`, `mov`, `m4v` y `webm`. Cloudinary genera IDs únicos, no admite un ID enviado por el cliente y no sobrescribe archivos. Ambos valores públicos ya están incluidos en el comando de ejecución anterior.
+`cloudinary.json` define dos valores: `CLOUDINARY_CLOUD_NAME` (el `cloud_name` de la cuenta) y `CLOUDINARY_UPLOAD_PRESET` (un preset **unsigned**). El preset de Videoteca guarda en la carpeta `videoteca`, acepta `mp4`, `mov`, `m4v` y `webm`, genera IDs únicos, no admite un ID enviado por el cliente y no sobrescribe archivos. Nunca pongas el API secret de Cloudinary en este archivo ni en la app.
 
 El [plan Free de Cloudinary](https://cloudinary.com/pricing) no requiere tarjeta, incluye 25 créditos mensuales y acepta [videos de hasta 100 MB](https://cloudinary.com/pricing/compare-plans). El diálogo permite elegir un video de la galería, escribir título y descripción, y ver el progreso. La app rechaza archivos vacíos, de otros formatos o de más de 100 MB.
 
@@ -34,6 +37,6 @@ Para la demostración web, usa videos cortos: el selector del navegador puede ca
 
 **Solo para demostración académica:** el nombre de un preset unsigned puede descubrirse en la app y utilizarse para subir archivos fuera de ella. Un producto público necesita subidas firmadas por un servidor que verifique Firebase Auth. Si Cloudinary acepta el archivo pero falla la escritura en Firestore, el archivo huérfano se elimina manualmente desde Cloudinary.
 
-La reproducción y edición de videos aún no están implementadas.
+La vista principal muestra los videos en un feed vertical de pantalla completa: cada gesto avanza un video, el visible se reproduce en silencio y una pantalla final indica que no hay más. La edición y el borrado de videos aún no están implementados.
 
 Los iconos de Android y web se pueden regenerar con `tool/generate_icons.ps1` en Windows.

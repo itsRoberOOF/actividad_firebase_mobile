@@ -1,0 +1,4 @@
+{
+  "CLOUDINARY_CLOUD_NAME": "tu_cloud_name",
+  "CLOUDINARY_UPLOAD_PRESET": "tu_preset_unsigned"
+}
