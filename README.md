@@ -6,10 +6,10 @@ Aplicación Flutter para Android y web con registro e inicio de sesión por corr
 
 ```sh
 flutter pub get
-flutter run -d edge
+flutter run -d edge --dart-define=CLOUDINARY_CLOUD_NAME=<cloud_name> --dart-define=CLOUDINARY_UPLOAD_PRESET=<upload_preset>
 ```
 
-Para Android, inicia un emulador o conecta un dispositivo y ejecuta `flutter run`.
+Para Android, inicia un emulador o conecta un dispositivo y ejecuta el mismo comando sin `-d edge`.
 
 ## Firebase
 
@@ -26,15 +26,9 @@ La app incluye acceso, registro, recuperación de contraseña y una vista inicia
 
 Los archivos se guardan en **Cloudinary** y sus datos (título, descripción, autor, fecha y URL) en Firestore. El autor sale de Firebase Auth; Firestore asigna la fecha en el servidor. No se usa Firebase Storage ni se guarda el archivo en Firestore.
 
-1. Crea una cuenta [Cloudinary Free](https://cloudinary.com/pricing), que no requiere tarjeta. El plan gratuito incluye 25 créditos mensuales y acepta videos de hasta 100 MB.
-2. En los ajustes de subida, crea un preset **unsigned** para video. Permite solo `mp4`, `mov`, `m4v` y `webm`, impide sobrescribir archivos y restringe los demás parámetros según tus necesidades. Guarda el nombre del preset y el `cloud_name` de tu cuenta.
-3. Ejecuta la app con ambos valores públicos:
+La cuenta usa el `cloud_name` público `<cloud_name>`. El preset `<upload_preset>` está configurado como **unsigned**, en la carpeta `videoteca`, para `mp4`, `mov`, `m4v` y `webm`. Cloudinary genera IDs únicos, no admite un ID enviado por el cliente y no sobrescribe archivos. Ambos valores públicos ya están incluidos en el comando de ejecución anterior.
 
-```sh
-flutter run -d edge --dart-define=CLOUDINARY_CLOUD_NAME=TU_CLOUD_NAME --dart-define=CLOUDINARY_UPLOAD_PRESET=TU_PRESET
-```
-
-En Android, omite `-d edge` y selecciona el dispositivo. El diálogo permite elegir un video de la galería, escribir título y descripción, y ver el progreso. La app rechaza archivos vacíos, de otros formatos o de más de 100 MB.
+El [plan Free de Cloudinary](https://cloudinary.com/pricing) no requiere tarjeta, incluye 25 créditos mensuales y acepta [videos de hasta 100 MB](https://cloudinary.com/pricing/compare-plans). El diálogo permite elegir un video de la galería, escribir título y descripción, y ver el progreso. La app rechaza archivos vacíos, de otros formatos o de más de 100 MB.
 
 Para la demostración web, usa videos cortos: el selector del navegador puede cargar el archivo completo en memoria antes de enviarlo, incluso si está por debajo del límite de 100 MB.
 
