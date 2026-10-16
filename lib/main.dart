@@ -743,11 +743,11 @@ class VideotecaHome extends StatelessWidget {
           repository: videoRepository,
         );
     final currentUser = author ?? FirebaseAuth.instance.currentUser;
-    final name = currentUser?.displayName;
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: canvas,
-        title: const Wordmark(dark: true),
+        backgroundColor: ink,
+        foregroundColor: Colors.white,
+        title: const Wordmark(dark: false),
         actions: [
           IconButton(
             tooltip: 'Cerrar sesión',
@@ -779,37 +779,7 @@ class VideotecaHome extends StatelessWidget {
           }
         },
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 980),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name == null || name.isEmpty
-                      ? 'Explora Videoteca'
-                      : 'Hola, $name',
-                  style: const TextStyle(
-                    color: ink,
-                    fontSize: 32,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -1,
-                  ),
-                ),
-                const SizedBox(height: 7),
-                const Text(
-                  'Videos compartidos por la comunidad',
-                  style: TextStyle(fontSize: 16, color: muted),
-                ),
-                const SizedBox(height: 24),
-                Expanded(child: VideoList(repository: videoRepository)),
-              ],
-            ),
-          ),
-        ),
-      ),
+      body: VideoList(repository: videoRepository),
     );
   }
 }
