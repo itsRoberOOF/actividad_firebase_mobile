@@ -46,3 +46,13 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Same Media3 and ML Kit versions used by video_player_android and google_mlkit_face_detection.
+    val media3Version = "1.9.2"
+    implementation("androidx.media3:media3-common:$media3Version")
+    implementation("androidx.media3:media3-effect:$media3Version")
+    implementation("androidx.media3:media3-transformer:$media3Version")
+    implementation("com.google.mlkit:face-detection:16.1.7")
+    testImplementation("junit:junit:4.13.2")
+}

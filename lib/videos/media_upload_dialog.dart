@@ -2,32 +2,51 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-import 'video_publisher.dart';
+import '../capture/camera_capture_types.dart';
+import '../filters/face_filter_service.dart';
+import '../filters/filter_kind.dart';
+import 'media_publisher.dart';
+import 'media_type.dart';
 
-typedef VideoPicker = Future<XFile?> Function();
+typedef MediaPicker = Future<XFile?> Function();
 
-class VideoUploadDialog extends StatefulWidget {
-  const VideoUploadDialog({
+enum _Phase { idle, applyingFilter, uploading }
+
+class MediaUploadDialog extends StatefulWidget {
+  const MediaUploadDialog({
     super.key,
     required this.publisher,
     required this.author,
+    this.pickPhoto,
     this.pickVideo,
+    this.capture,
+    this.filters,
   });
 
-  final VideoPublisher publisher;
+  final MediaPublisher publisher;
   final User? author;
-  final VideoPicker? pickVideo;
+  final MediaPicker? pickPhoto;
+  final MediaPicker? pickVideo;
+
+  /// Null fuera de Android: no hay cámara en la interfaz.
+  final CameraCaptureLauncher? capture;
+
+  /// Null fuera de Android: no hay filtros ML en la interfaz.
+  final FaceFilterService? filters;
 
   @override
-  State<VideoUploadDialog> createState() => _VideoUploadDialogState();
+  State<MediaUploadDialog> createState() => _MediaUploadDialogState();
 }
 
-class _VideoUploadDialogState extends State<VideoUploadDialog> {
+class _MediaUploadDialogState extends State<MediaUploadDialog> {
   final title = TextEditingController();
   final description = TextEditingController();
   XFile? selected;
+  MediaType? selectedType;
   int? selectedBytes;
+  FaceFilter? filter;
   bool busy = false;
+  _Phase phase = _Phase.idle;
   double progress = 0;
   String? error;
 
@@ -38,15 +57,17 @@ class _VideoUploadDialogState extends State<VideoUploadDialog> {
     super.dispose();
   }
 
-  Future<void> selectVideo() async {
+  void _setError(String message) {
+    if (mounted) setState(() => error = message);
+  }
+
+  Future<void> _select(Future<XFile?> Function() pick) async {
     if (busy) return;
     try {
-      final picked =
-          await (widget.pickVideo?.call() ??
-              ImagePicker().pickVideo(source: ImageSource.gallery));
+      final picked = await pick();
       if (picked == null) return;
       final bytes = await picked.length();
-      validateVideoSelection(
+      final type = validateMediaSelection(
         name: picked.name,
         mimeType: picked.mimeType,
         bytes: bytes,
@@ -54,36 +75,56 @@ class _VideoUploadDialogState extends State<VideoUploadDialog> {
       if (mounted) {
         setState(() {
           selected = picked;
+          selectedType = type;
           selectedBytes = bytes;
           error = null;
         });
       }
-    } on VideoPublishException catch (problem) {
-      if (mounted) setState(() => error = problem.message);
+    } on MediaPublishException catch (problem) {
+      _setError(problem.message);
     } catch (_) {
-      if (mounted) {
-        setState(
-          () => error = 'No se pudo abrir el video. Inténtalo otra vez.',
-        );
-      }
+      _setError('No se pudo abrir el archivo. Inténtalo otra vez.');
     }
   }
 
   Future<void> publish() async {
     if (busy) return;
     final file = selected;
-    if (file == null) {
-      setState(() => error = 'Selecciona un video para continuar.');
+    final type = selectedType;
+    if (file == null || type == null) {
+      setState(() => error = 'Selecciona una foto o un video para continuar.');
       return;
     }
     setState(() {
       busy = true;
       progress = 0;
       error = null;
+      phase = _Phase.idle;
     });
     try {
+      var toUpload = file;
+      final chosen = filter;
+      final service = widget.filters;
+      if (chosen != null && service != null) {
+        setState(() => phase = _Phase.applyingFilter);
+        toUpload = type == MediaType.image
+            ? await service.applyToPhoto(file, chosen)
+            : await service.applyToVideo(
+                file,
+                chosen,
+                onProgress: (value) {
+                  if (mounted) setState(() => progress = value);
+                },
+              );
+      }
+      if (mounted) {
+        setState(() {
+          phase = _Phase.uploading;
+          progress = 0;
+        });
+      }
       await widget.publisher.publish(
-        file: file,
+        file: toUpload,
         title: title.text,
         description: description.text,
         author: widget.author,
@@ -92,18 +133,29 @@ class _VideoUploadDialogState extends State<VideoUploadDialog> {
         },
       );
       if (mounted) Navigator.of(context).pop(true);
-    } on VideoPublishException catch (problem) {
-      if (mounted) setState(() => error = problem.message);
+    } on FilterException catch (problem) {
+      _setError(problem.message);
+    } on MediaPublishException catch (problem) {
+      _setError(problem.message);
     } catch (_) {
-      if (mounted) {
-        setState(
-          () => error = 'No se pudo publicar el video. Inténtalo otra vez.',
-        );
-      }
+      _setError('No se pudo publicar. Inténtalo otra vez.');
     } finally {
-      if (mounted) setState(() => busy = false);
+      if (mounted) {
+        setState(() {
+          busy = false;
+          phase = _Phase.idle;
+        });
+      }
     }
   }
+
+  String get _progressLabel => switch (phase) {
+    _Phase.applyingFilter when selectedType == MediaType.video =>
+      'Aplicando filtro ${(progress * 100).round()} %',
+    _Phase.applyingFilter => 'Aplicando filtro…',
+    _Phase.uploading => 'Subiendo ${(progress * 100).round()} %',
+    _Phase.idle => '',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -112,6 +164,8 @@ class _VideoUploadDialogState extends State<VideoUploadDialog> {
     const muted = Color(0xFF5A7180);
     final configured = widget.publisher.uploader.isConfigured;
     final file = selected;
+    final indeterminate =
+        phase == _Phase.applyingFilter && selectedType == MediaType.image;
 
     return PopScope(
       canPop: !busy,
@@ -144,7 +198,7 @@ class _VideoUploadDialogState extends State<VideoUploadDialog> {
                     const SizedBox(width: 14),
                     const Expanded(
                       child: Text(
-                        'Subir video',
+                        'Nueva publicación',
                         style: TextStyle(
                           fontSize: 23,
                           fontWeight: FontWeight.w800,
@@ -163,7 +217,7 @@ class _VideoUploadDialogState extends State<VideoUploadDialog> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Comparte algo que valga la pena ver.',
+                  'Comparte una foto o un video.',
                   style: TextStyle(color: muted, fontSize: 15),
                 ),
                 const SizedBox(height: 16),
@@ -178,21 +232,85 @@ class _VideoUploadDialogState extends State<VideoUploadDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      OutlinedButton.icon(
-                        onPressed: busy ? null : selectVideo,
-                        icon: const Icon(Icons.video_library_outlined),
-                        label: const Text('Seleccionar video'),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: busy
+                                ? null
+                                : () => _select(
+                                    widget.pickPhoto ??
+                                        () => ImagePicker().pickImage(
+                                          source: ImageSource.gallery,
+                                        ),
+                                  ),
+                            icon: const Icon(Icons.photo_outlined),
+                            label: const Text('Foto'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: busy
+                                ? null
+                                : () => _select(
+                                    widget.pickVideo ??
+                                        () => ImagePicker().pickVideo(
+                                          source: ImageSource.gallery,
+                                        ),
+                                  ),
+                            icon: const Icon(Icons.video_library_outlined),
+                            label: const Text('Video'),
+                          ),
+                          if (widget.capture != null)
+                            OutlinedButton.icon(
+                              onPressed: busy
+                                  ? null
+                                  : () => _select(
+                                      () => widget.capture!(context),
+                                    ),
+                              icon: const Icon(Icons.photo_camera_outlined),
+                              label: const Text('Cámara'),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 8),
                       Text(
                         file == null
-                            ? 'MP4, MOV, M4V o WebM · máximo 100 MB'
-                            : '${file.name.isEmpty ? 'Video seleccionado' : file.name} · ${((selectedBytes ?? 0) / 1024 / 1024).toStringAsFixed(1)} MB',
+                            ? 'Foto JPG, PNG o WebP · Video MP4, MOV, M4V o WebM · máximo 100 MB'
+                            : '${file.name.isEmpty ? 'Archivo seleccionado' : file.name} · ${((selectedBytes ?? 0) / 1024 / 1024).toStringAsFixed(1)} MB',
                         style: const TextStyle(color: muted, fontSize: 13),
                       ),
                     ],
                   ),
                 ),
+                if (widget.filters != null && file != null) ...[
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Filtro facial',
+                    style: TextStyle(fontWeight: FontWeight.w700, color: ink),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('Sin filtro'),
+                        selected: filter == null,
+                        onSelected: busy
+                            ? null
+                            : (_) => setState(() => filter = null),
+                      ),
+                      for (final option in FaceFilter.values)
+                        ChoiceChip(
+                          label: Text(option.label),
+                          selected: filter == option,
+                          onSelected: busy
+                              ? null
+                              : (_) => setState(() => filter = option),
+                        ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 16),
                 const Text(
                   'Título',
@@ -200,13 +318,13 @@ class _VideoUploadDialogState extends State<VideoUploadDialog> {
                 ),
                 const SizedBox(height: 8),
                 TextField(
-                  key: const Key('video-title'),
+                  key: const Key('media-title'),
                   controller: title,
                   maxLength: 100,
                   enabled: !busy,
                   textCapitalization: TextCapitalization.sentences,
                   decoration: const InputDecoration(
-                    hintText: '¿De qué trata tu video?',
+                    hintText: '¿Qué estás compartiendo?',
                     counterText: '',
                   ),
                 ),
@@ -217,7 +335,7 @@ class _VideoUploadDialogState extends State<VideoUploadDialog> {
                 ),
                 const SizedBox(height: 8),
                 TextField(
-                  key: const Key('video-description'),
+                  key: const Key('media-description'),
                   controller: description,
                   maxLength: 1000,
                   maxLines: 3,
@@ -231,7 +349,7 @@ class _VideoUploadDialogState extends State<VideoUploadDialog> {
                 if (!configured) ...[
                   const SizedBox(height: 12),
                   const Text(
-                    'Configura Cloudinary para poder publicar videos.',
+                    'Configura Cloudinary para poder publicar.',
                     style: TextStyle(color: Color(0xFF8A4E10)),
                   ),
                 ],
@@ -244,12 +362,12 @@ class _VideoUploadDialogState extends State<VideoUploadDialog> {
                 ],
                 if (busy) ...[
                   const SizedBox(height: 16),
-                  LinearProgressIndicator(value: progress, color: sky),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Subiendo ${(progress * 100).round()} %',
-                    style: const TextStyle(color: muted),
+                  LinearProgressIndicator(
+                    value: indeterminate ? null : progress,
+                    color: sky,
                   ),
+                  const SizedBox(height: 6),
+                  Text(_progressLabel, style: const TextStyle(color: muted)),
                 ],
                 const SizedBox(height: 16),
                 SizedBox(
@@ -261,7 +379,7 @@ class _VideoUploadDialogState extends State<VideoUploadDialog> {
                       padding: const EdgeInsets.symmetric(vertical: 17),
                     ),
                     icon: const Icon(Icons.upload_rounded),
-                    label: const Text('Publicar video'),
+                    label: const Text('Publicar'),
                   ),
                 ),
               ],

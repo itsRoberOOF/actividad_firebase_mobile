@@ -32,10 +32,11 @@ void main() {
     final store = _Store();
     final repository = VideoRepository(store: store);
 
-    await repository.createVideo(
+    await repository.createPost(
       title: 'Mi primer video',
       description: 'Descripción',
-      videoUrl: 'https://example.com/video.mp4',
+      mediaType: MediaType.video,
+      mediaUrl: 'https://example.com/video.mp4',
       cloudinaryPublicId: 'videos/abc',
       author: _Author(),
     );
@@ -48,14 +49,52 @@ void main() {
 
   test('limita el nombre del autor al máximo que aceptan las reglas', () async {
     final store = _Store();
-    await VideoRepository(store: store).createVideo(
+    await VideoRepository(store: store).createPost(
       title: 'Prueba',
       description: '',
-      videoUrl: 'https://res.cloudinary.com/demo/video/upload/test.mp4',
+      mediaType: MediaType.image,
+      mediaUrl: 'https://res.cloudinary.com/demo/image/upload/test.jpg',
       cloudinaryPublicId: 'test',
       author: _LongNameAuthor(),
     );
     expect((store.added?['authorName'] as String).length, 100);
+  });
+
+  test('rechaza títulos vacíos antes de escribir', () async {
+    final store = _Store();
+    await expectLater(
+      VideoRepository(store: store).createPost(
+        title: '   ',
+        description: '',
+        mediaType: MediaType.image,
+        mediaUrl: 'https://res.cloudinary.com/demo/image/upload/test.jpg',
+        cloudinaryPublicId: 'test',
+        author: _Author(),
+      ),
+      throwsArgumentError,
+    );
+    expect(store.added, isNull);
+  });
+
+  test('lee documentos antiguos de video sin mediaType', () async {
+    final store = _Store()
+      ..documents = [
+        VideoDocument('legacy', {
+          'title': 'Antiguo',
+          'description': '',
+          'videoUrl': 'https://example.com/old.mp4',
+          'cloudinaryPublicId': 'old',
+          'authorId': 'one',
+          'authorName': 'Ana',
+          'createdAt': Timestamp.fromDate(DateTime.utc(2025)),
+        }),
+      ];
+
+    final video = (await VideoRepository(store: store).watchVideos().first)
+        .single;
+
+    expect(video.mediaType, MediaType.video);
+    expect(video.mediaUrl, 'https://example.com/old.mp4');
   });
 
   test('ordena registros persistidos y tolera fecha pendiente', () async {
@@ -73,7 +112,8 @@ void main() {
         VideoDocument('pending', {
           'title': 'Pendiente',
           'description': '',
-          'videoUrl': 'https://example.com/pending.mp4',
+          'mediaType': 'image',
+          'mediaUrl': 'https://example.com/pending.jpg',
           'cloudinaryPublicId': 'pending',
           'authorId': 'one',
           'authorName': 'Ana',
@@ -82,7 +122,8 @@ void main() {
         VideoDocument('new', {
           'title': 'Nuevo',
           'description': '',
-          'videoUrl': 'https://example.com/new.mp4',
+          'mediaType': 'video',
+          'mediaUrl': 'https://example.com/new.mp4',
           'cloudinaryPublicId': 'new',
           'authorId': 'two',
           'authorName': 'Luis',
@@ -94,5 +135,6 @@ void main() {
 
     expect(videos.map((video) => video.id), ['new', 'old', 'pending']);
     expect(videos.last.createdAt, isNull);
+    expect(videos.last.mediaType, MediaType.image);
   });
 }

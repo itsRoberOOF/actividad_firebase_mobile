@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+import 'like_repository.dart';
 import 'video_repository.dart';
 
 typedef VideoStageBuilder = Widget Function(
@@ -10,10 +11,20 @@ typedef VideoStageBuilder = Widget Function(
 );
 
 class VideoList extends StatefulWidget {
-  const VideoList({super.key, required this.repository, this.videoBuilder});
+  const VideoList({
+    super.key,
+    required this.repository,
+    this.videoBuilder,
+    this.likeRepository,
+    this.viewerId,
+  });
 
   final VideoRepository repository;
   final VideoStageBuilder? videoBuilder;
+
+  /// Sin repositorio de likes el feed no muestra controles de like.
+  final LikeRepository? likeRepository;
+  final String? viewerId;
 
   @override
   State<VideoList> createState() => _VideoListState();
@@ -53,7 +64,7 @@ class _VideoListState extends State<VideoList> {
       if (snapshot.hasError) {
         return const _FeedMessage(
           icon: Icons.wifi_off_rounded,
-          title: 'No pudimos cargar los videos',
+          title: 'No pudimos cargar las publicaciones',
           detail: 'Revisa tu conexión e inténtalo de nuevo.',
         );
       }
@@ -64,8 +75,8 @@ class _VideoListState extends State<VideoList> {
       if (records.isEmpty) {
         return const _FeedMessage(
           icon: Icons.video_library_outlined,
-          title: 'Todavía no hay videos',
-          detail: 'Pulsa “Subir video” para compartir el primero.',
+          title: 'Todavía no hay publicaciones',
+          detail: 'Pulsa “Nueva publicación” para compartir la primera.',
         );
       }
       return LayoutBuilder(
@@ -90,25 +101,25 @@ class _VideoListState extends State<VideoList> {
                   if (index == records.length) {
                     return const _FeedMessage(
                       icon: Icons.video_library_outlined,
-                      title: 'Ya viste todos los videos',
-                      detail: 'Vuelve más tarde para descubrir nuevos clips.',
+                      title: 'Ya viste todo',
+                      detail: 'Vuelve más tarde para descubrir nuevas publicaciones.',
                     );
                   }
                   final record = records[index];
-                  return _VideoPage(
+                  final isActive = index == _activeIndex;
+                  final likeRepository = widget.likeRepository;
+                  return _PostPage(
                     key: ValueKey(record.id),
                     record: record,
-                    video:
-                        widget.videoBuilder?.call(
-                          context,
-                          record,
-                          index == _activeIndex,
-                        ) ??
-                        _VideoStage(
-                          key: ValueKey('stage-${record.id}'),
-                          record: record,
-                          isActive: index == _activeIndex,
-                        ),
+                    media: _buildMedia(context, record, isActive),
+                    likeButton: likeRepository == null
+                        ? null
+                        : _LikeButton(
+                            key: ValueKey('like-${record.id}'),
+                            repository: likeRepository,
+                            postId: record.id,
+                            viewerId: widget.viewerId,
+                          ),
                   );
                 },
               ),
@@ -116,13 +127,31 @@ class _VideoListState extends State<VideoList> {
       );
     },
   );
+
+  Widget _buildMedia(BuildContext context, VideoRecord record, bool isActive) {
+    if (record.mediaType == MediaType.image) {
+      return _PhotoStage(key: ValueKey('photo-${record.id}'), url: record.mediaUrl);
+    }
+    return widget.videoBuilder?.call(context, record, isActive) ??
+        _VideoStage(
+          key: ValueKey('stage-${record.id}'),
+          record: record,
+          isActive: isActive,
+        );
+  }
 }
 
-class _VideoPage extends StatelessWidget {
-  const _VideoPage({super.key, required this.record, required this.video});
+class _PostPage extends StatelessWidget {
+  const _PostPage({
+    super.key,
+    required this.record,
+    required this.media,
+    required this.likeButton,
+  });
 
   final VideoRecord record;
-  final Widget video;
+  final Widget media;
+  final Widget? likeButton;
 
   @override
   Widget build(BuildContext context) {
@@ -133,7 +162,7 @@ class _VideoPage extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        ColoredBox(color: Colors.black, child: video),
+        ColoredBox(color: Colors.black, child: media),
         const IgnorePointer(
           child: DecoratedBox(
             decoration: BoxDecoration(
@@ -182,9 +211,124 @@ class _VideoPage extends StatelessWidget {
             ],
           ),
         ),
+        if (likeButton != null)
+          Positioned(right: 16, bottom: 160, child: likeButton!),
       ],
     );
   }
+}
+
+class _LikeButton extends StatefulWidget {
+  const _LikeButton({
+    super.key,
+    required this.repository,
+    required this.postId,
+    required this.viewerId,
+  });
+
+  final LikeRepository repository;
+  final String postId;
+  final String? viewerId;
+
+  @override
+  State<_LikeButton> createState() => _LikeButtonState();
+}
+
+class _LikeButtonState extends State<_LikeButton> {
+  late Stream<PostLikes> _likes;
+
+  @override
+  void initState() {
+    super.initState();
+    _likes = _watch();
+  }
+
+  @override
+  void didUpdateWidget(covariant _LikeButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.repository != widget.repository ||
+        oldWidget.postId != widget.postId ||
+        oldWidget.viewerId != widget.viewerId) {
+      _likes = _watch();
+    }
+  }
+
+  Stream<PostLikes> _watch() => widget.repository.watchLikes(
+    widget.postId,
+    viewerId: widget.viewerId,
+  );
+
+  Future<void> _toggle(bool liked) async {
+    final viewerId = widget.viewerId;
+    if (viewerId == null) return;
+    try {
+      await widget.repository.setLiked(
+        postId: widget.postId,
+        viewerId: viewerId,
+        liked: liked,
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo actualizar tu like.')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<PostLikes>(
+    stream: _likes,
+    builder: (context, snapshot) {
+      final likes = snapshot.data;
+      final liked = likes?.likedByViewer ?? false;
+      final canToggle = widget.viewerId != null && likes != null;
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton.filledTonal(
+            tooltip: liked ? 'Quitar like' : 'Dar like',
+            onPressed: canToggle ? () => _toggle(!liked) : null,
+            icon: Icon(
+              liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              color: liked ? const Color(0xFFFF5C7A) : null,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            likes == null ? '—' : '${likes.count}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+class _PhotoStage extends StatelessWidget {
+  const _PhotoStage({super.key, required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) => SizedBox.expand(
+    child: Image.network(
+      url,
+      fit: BoxFit.cover,
+      loadingBuilder: (context, child, progress) => progress == null
+          ? child
+          : const Center(child: CircularProgressIndicator()),
+      errorBuilder: (context, error, stackTrace) => const Center(
+        child: Text(
+          'No se pudo mostrar la foto.',
+          style: TextStyle(color: Colors.white),
+        ),
+      ),
+    ),
+  );
 }
 
 class _VideoStage extends StatefulWidget {
@@ -211,7 +355,7 @@ class _VideoStageState extends State<_VideoStage> {
   @override
   void didUpdateWidget(covariant _VideoStage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.record.videoUrl != widget.record.videoUrl ||
+    if (oldWidget.record.mediaUrl != widget.record.mediaUrl ||
         oldWidget.isActive != widget.isActive) {
       _stop();
       if (widget.isActive) _start();
@@ -221,7 +365,7 @@ class _VideoStageState extends State<_VideoStage> {
   Future<void> _start() async {
     _failed = false;
     final controller = VideoPlayerController.networkUrl(
-      Uri.parse(widget.record.videoUrl),
+      Uri.parse(widget.record.mediaUrl),
     );
     _controller = controller;
     try {
