@@ -40,6 +40,10 @@ dependencies:
   image_picker: ^1.2.4
   dio: ^5.11.1
   video_player: 2.14.1
+  camera: ^0.12.1
+  google_mlkit_face_detection: ^0.15.1
+  image: ^4.12.0
+  path_provider: ^2.1.6
 
 dev_dependencies:
   flutter_test:
@@ -62,6 +66,10 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # Sprites transparentes de los filtros faciales; ver tool/generate_filter_assets.dart.
+  assets:
+    - assets/filters/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

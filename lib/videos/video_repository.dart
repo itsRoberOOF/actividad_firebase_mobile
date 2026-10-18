@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'media_type.dart';
 import 'video_record.dart';
 
+export 'media_type.dart';
 export 'video_record.dart';
 
 class VideoDocument {
@@ -59,10 +61,11 @@ class VideoRepository {
     return videos;
   });
 
-  Future<void> createVideo({
+  Future<void> createPost({
     required String title,
     required String description,
-    required String videoUrl,
+    required MediaType mediaType,
+    required String mediaUrl,
     required String cloudinaryPublicId,
     required User author,
   }) async {
@@ -91,7 +94,8 @@ class VideoRepository {
     await _store.add({
       'title': cleanTitle,
       'description': cleanDescription,
-      'videoUrl': videoUrl,
+      'mediaType': mediaType.firestoreValue,
+      'mediaUrl': mediaUrl,
       'cloudinaryPublicId': cloudinaryPublicId,
       'authorId': author.uid,
       'authorName': authorName,

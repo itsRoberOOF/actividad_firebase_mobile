@@ -3,9 +3,9 @@ import 'dart:typed_data';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:videoteca/videos/video_publisher.dart';
+import 'package:videoteca/videos/media_publisher.dart';
+import 'package:videoteca/videos/media_uploader.dart';
 import 'package:videoteca/videos/video_repository.dart';
-import 'package:videoteca/videos/video_uploader.dart';
 
 class _Author extends Fake implements User {
   @override
@@ -29,149 +29,150 @@ class _Store implements VideoDocumentStore {
   Stream<List<VideoDocument>> watch() => const Stream.empty();
 }
 
-class _Uploader implements VideoUploader {
+class _Uploader implements MediaUploader {
   _Uploader({this.isConfigured = true});
 
   @override
   final bool isConfigured;
-  int uploads = 0;
+  final List<MediaType> uploadedTypes = [];
   bool fail = false;
 
   @override
-  Future<UploadedVideo> upload(
+  Future<UploadedMedia> upload(
     XFile file, {
+    required MediaType mediaType,
     required void Function(double) onProgress,
   }) async {
-    uploads++;
-    if (fail) throw const VideoPublishException('Falló la subida');
+    uploadedTypes.add(mediaType);
+    if (fail) throw const MediaPublishException('Falló la subida');
     onProgress(.8);
-    return const UploadedVideo(
+    return const UploadedMedia(
       secureUrl: 'https://res.cloudinary.com/demo/video/upload/test.mp4',
       publicId: 'videos/test',
     );
   }
 }
 
-XFile video() => XFile.fromData(
+XFile _video() => XFile.fromData(
   Uint8List.fromList([1, 2, 3]),
   name: 'prueba.mp4',
   mimeType: 'video/mp4',
 );
 
+XFile _photo() => XFile.fromData(
+  Uint8List.fromList([1, 2, 3]),
+  name: 'foto.jpg',
+  mimeType: 'image/jpeg',
+);
+
 void main() {
-  test('rechaza archivos que no son video o superan 100 MB', () {
-    expect(
-      () => validateVideoSelection(
-        name: 'archivo.pdf',
-        mimeType: 'application/pdf',
-        bytes: 100,
-      ),
-      throwsA(isA<VideoPublishException>()),
-    );
-    expect(
-      () => validateVideoSelection(
-        name: 'video.mp4',
-        mimeType: 'video/mp4',
-        bytes: 100000001,
-      ),
-      throwsA(isA<VideoPublishException>()),
-    );
-  });
-
-  test('acepta un MP4 con MIME genérico de navegador', () {
-    expect(
-      () => validateVideoSelection(
-        name: 'clip.mp4',
-        mimeType: 'application/octet-stream',
-        bytes: 1024,
-      ),
-      returnsNormally,
-    );
-  });
-
   test('bloquea publicación sin sesión, título o configuración', () async {
     final uploader = _Uploader();
-    final publisher = VideoPublisher(
+    final publisher = MediaPublisher(
       uploader: uploader,
       repository: VideoRepository(store: _Store()),
     );
     expect(
       () => publisher.publish(
-        file: video(),
+        file: _video(),
         title: 'Video',
         description: '',
         author: null,
         onProgress: (_) {},
       ),
-      throwsA(isA<VideoPublishException>()),
+      throwsA(isA<MediaPublishException>()),
     );
     expect(
       () => publisher.publish(
-        file: video(),
+        file: _video(),
         title: '  ',
         description: '',
         author: _Author(),
         onProgress: (_) {},
       ),
-      throwsA(isA<VideoPublishException>()),
+      throwsA(isA<MediaPublishException>()),
     );
-    final noConfig = VideoPublisher(
+    final noConfig = MediaPublisher(
       uploader: _Uploader(isConfigured: false),
       repository: VideoRepository(store: _Store()),
     );
     expect(
       () => noConfig.publish(
-        file: video(),
+        file: _video(),
         title: 'Video',
         description: '',
         author: _Author(),
         onProgress: (_) {},
       ),
-      throwsA(isA<VideoPublishException>()),
+      throwsA(isA<MediaPublishException>()),
     );
-    expect(uploader.uploads, 0);
+    expect(uploader.uploadedTypes, isEmpty);
   });
 
-  test('guarda los datos después de subir el video', () async {
+  test('guarda un video con su tipo y URL después de subirlo', () async {
     final store = _Store();
     final uploader = _Uploader();
     double progress = 0;
-    await VideoPublisher(
+    await MediaPublisher(
       uploader: uploader,
       repository: VideoRepository(store: store),
     ).publish(
-      file: video(),
+      file: _video(),
       title: ' Mi video ',
       description: ' Descripción ',
       author: _Author(),
       onProgress: (value) => progress = value,
     );
 
-    expect(uploader.uploads, 1);
+    expect(uploader.uploadedTypes, [MediaType.video]);
     expect(store.added?['title'], 'Mi video');
     expect(store.added?['description'], 'Descripción');
     expect(store.added?['authorId'], 'ana-uid');
+    expect(store.added?['mediaType'], 'video');
+    expect(
+      store.added?['mediaUrl'],
+      'https://res.cloudinary.com/demo/video/upload/test.mp4',
+    );
+    expect(store.added?.containsKey('videoUrl'), isFalse);
     expect(progress, .8);
   });
 
+  test('publica una foto como imagen', () async {
+    final store = _Store();
+    final uploader = _Uploader();
+    await MediaPublisher(
+      uploader: uploader,
+      repository: VideoRepository(store: store),
+    ).publish(
+      file: _photo(),
+      title: 'Atardecer',
+      description: '',
+      author: _Author(),
+      onProgress: (_) {},
+    );
+
+    expect(uploader.uploadedTypes, [MediaType.image]);
+    expect(store.added?['mediaType'], 'image');
+  });
+
   test(
-    'no guarda si falla Cloudinary y no confirma si falla Firestore',
+    'no guarda si falla la subida y no confirma si falla Firestore',
     () async {
       final store = _Store();
       final uploader = _Uploader()..fail = true;
-      final publisher = VideoPublisher(
+      final publisher = MediaPublisher(
         uploader: uploader,
         repository: VideoRepository(store: store),
       );
       Future<void> publish() => publisher.publish(
-        file: video(),
+        file: _video(),
         title: 'Video',
         description: '',
         author: _Author(),
         onProgress: (_) {},
       );
 
-      await expectLater(publish(), throwsA(isA<VideoPublishException>()));
+      await expectLater(publish(), throwsA(isA<MediaPublishException>()));
       expect(store.added, isNull);
 
       uploader.fail = false;
@@ -179,7 +180,7 @@ void main() {
       await expectLater(
         publish(),
         throwsA(
-          isA<VideoPublishException>().having(
+          isA<MediaPublishException>().having(
             (error) => error.message,
             'mensaje',
             contains('no se publicó'),

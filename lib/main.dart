@@ -2,12 +2,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
+import 'capture/camera_capture_factory.dart';
+import 'capture/camera_capture_types.dart';
+import 'filters/face_filter_factory.dart';
+import 'filters/face_filter_service.dart';
 import 'firebase_options.dart';
+import 'videos/like_repository.dart';
+import 'videos/media_publisher.dart';
+import 'videos/media_upload_dialog.dart';
+import 'videos/media_uploader.dart';
 import 'videos/video_list.dart';
-import 'videos/video_publisher.dart';
 import 'videos/video_repository.dart';
-import 'videos/video_upload_dialog.dart';
-import 'videos/video_uploader.dart';
 
 const ink = Color(0xFF102B3C);
 const sky = Color(0xFF37BCE8);
@@ -724,22 +729,32 @@ class VideotecaHome extends StatelessWidget {
     super.key,
     this.repository,
     this.publisher,
+    this.likeRepository,
     this.author,
+    this.pickPhoto,
     this.pickVideo,
+    this.capture,
+    this.filters,
   });
 
   final VideoRepository? repository;
-  final VideoPublisher? publisher;
+  final MediaPublisher? publisher;
+  final LikeRepository? likeRepository;
   final User? author;
-  final VideoPicker? pickVideo;
+  final MediaPicker? pickPhoto;
+  final MediaPicker? pickVideo;
+
+  /// Por defecto, sólo Android tiene cámara y filtros faciales.
+  final CameraCaptureLauncher? capture;
+  final FaceFilterService? filters;
 
   @override
   Widget build(BuildContext context) {
     final videoRepository = repository ?? VideoRepository();
     final videoPublisher =
         publisher ??
-        VideoPublisher(
-          uploader: CloudinaryVideoUploader(),
+        MediaPublisher(
+          uploader: CloudinaryMediaUploader(),
           repository: videoRepository,
         );
     final currentUser = author ?? FirebaseAuth.instance.currentUser;
@@ -761,25 +776,32 @@ class VideotecaHome extends StatelessWidget {
         backgroundColor: sky,
         foregroundColor: ink,
         icon: const Icon(Icons.upload_rounded),
-        label: const Text('Subir video'),
+        label: const Text('Nueva publicación'),
         onPressed: () async {
           final published = await showDialog<bool>(
             context: context,
             barrierDismissible: false,
-            builder: (_) => VideoUploadDialog(
+            builder: (_) => MediaUploadDialog(
               publisher: videoPublisher,
               author: currentUser,
+              pickPhoto: pickPhoto,
               pickVideo: pickVideo,
+              capture: capture ?? createCameraCaptureLauncher(),
+              filters: filters ?? createFaceFilterService(),
             ),
           );
           if (published == true && context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Tu video se publicó.')),
+              const SnackBar(content: Text('Tu publicación se subió.')),
             );
           }
         },
       ),
-      body: VideoList(repository: videoRepository),
+      body: VideoList(
+        repository: videoRepository,
+        likeRepository: likeRepository ?? LikeRepository(),
+        viewerId: currentUser?.uid,
+      ),
     );
   }
 }
